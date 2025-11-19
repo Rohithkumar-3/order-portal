@@ -10,10 +10,10 @@ export default async function handler(req, res) {
   try {
     const { cart, from_email } = req.body
 
-    // BUILD ORDER ITEMS + TOTALS
     const items = []
     let grandTotal = 0
 
+    // Build items list with totals
     for (const p of products) {
       const qty = Number(cart[p.id] || 0)
       if (qty > 0) {
@@ -25,29 +25,30 @@ export default async function handler(req, res) {
           name: p.name,
           rate: p.rate,
           qty,
-          lineTotal
+          total: lineTotal
         })
       }
     }
 
-    // GENERATE PDF
+    // CREATE PDF
     const doc = new PDFDocument({ margin: 40 })
-    const buffer = new streamBuffers.WritableStreamBuffer()
-    doc.pipe(buffer)
+    const bufferStream = new streamBuffers.WritableStreamBuffer()
+    doc.pipe(bufferStream)
 
-    doc.fontSize(18).text("Order Notification", { align: "center" })
+    // PDF Header
+    doc.fontSize(18).text('Order Notification', { align: 'center' })
+    doc.moveDown()
+    doc.fontSize(11).text(`From: ${from_email || 'Distributor'}`)
+    doc.text('Date: ' + new Date().toLocaleString())
     doc.moveDown()
 
-    doc.fontSize(12).text(`From Distributor: ${from_email}`)
-    doc.text("Date: " + new Date().toLocaleString())
-    doc.moveDown(1)
-
-    doc.fontSize(14).text("Items Ordered:")
+    doc.fontSize(12).text('Items Ordered:')
     doc.moveDown(0.5)
 
+    // Items in PDF
     items.forEach(it => {
       doc.fontSize(11).text(
-        `${it.name} — Qty: ${it.qty} × Rate: ₹${it.rate} = ₹${it.lineTotal.toFixed(2)}`
+        `${it.name} — Qty: ${it.qty} × ₹${it.rate} = ₹${it.total.toFixed(2)}`
       )
     })
 
@@ -55,36 +56,44 @@ export default async function handler(req, res) {
 
     // GRAND TOTAL
     doc.fontSize(14).text(`Grand Total: ₹${grandTotal.toFixed(2)}`, {
-      align: "right"
+      align: 'right'
     })
 
     doc.end()
+    await new Promise(r => doc.on('end', r))
 
-    await new Promise(r => doc.on("end", r))
-    const pdfBuffer = buffer.getContents()
+    const pdfBuffer = bufferStream.getContents()
 
-    // STORE PDF
-    const fileName = `orders/order_${Date.now()}.pdf`
+    // File name
+    const fileName = `order_${Date.now()}.pdf`
+
+    // UPLOAD PDF
     const { error: upErr } = await supabase.storage
-      .from("orders")
-      .upload(fileName, pdfBuffer, { contentType: "application/pdf" })
+      .from('orders')
+      .upload(fileName, pdfBuffer, {
+        contentType: 'application/pdf',
+      })
 
     if (upErr) throw upErr
 
-    const { publicURL } =
-      supabase.storage.from("orders").getPublicUrl(fileName)
+    // PUBLIC URL
+    const { data: urlData } = supabase.storage
+      .from('orders')
+      .getPublicUrl(fileName)
 
-    // SAVE DB RECORD
+    const publicUrl = urlData.publicUrl
+
+    // SAVE IN DATABASE
     const { error: insErr } = await supabase
-      .from("orders")
+      .from('orders')
       .insert([
         {
           from_email,
           pdf_path: fileName,
-          pdf_url: publicURL,
-          items,
-          grand_total: grandTotal
-        }
+          pdf_url: publicUrl,
+          items,               // clean JSON
+          grand_total: grandTotal  // number only
+        },
       ])
 
     if (insErr) throw insErr
