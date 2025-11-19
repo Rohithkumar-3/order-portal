@@ -10,7 +10,7 @@ const supabase = createClient(
 export default function Manufacturer() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -18,63 +18,71 @@ export default function Manufacturer() {
   const [amount, setAmount] = useState("");
   const [selectedEmail, setSelectedEmail] = useState("");
 
-  const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
 
-  /** FIXED: manufacturer email check */
   const manufacturerEmails = ["manu@vfive.com"];
 
+  // ---------------------------------------------------------
+  // AUTH + LOAD ALL DATA
+  // ---------------------------------------------------------
   useEffect(() => {
-    async function loadData() {
+    async function init() {
       const { data: { session } } = await supabase.auth.getSession();
 
-      if (!session) return router.push("/");
+      if (!session) {
+        router.push("/");
+        return;
+      }
 
-      const userEmail = session.user.email.toLowerCase(); // <– FIXED
+      const userEmail = session.user.email.toLowerCase();
       setEmail(userEmail);
 
-      /** FIXED: lowercase check */
-      if (!manufacturerEmails.includes(userEmail))
-        return router.push("/");
+      if (!manufacturerEmails.includes(userEmail)) {
+        router.push("/");
+        return;
+      }
 
+      setAuthorized(true);
       await refreshAll();
-      setReady(true);
+
+      setLoading(false);
     }
 
-    loadData();
+    init();
   }, []);
 
-  /** LOAD ALL INFO */
+  // ---------------------------------------------------------
+  // REFRESH ALL DATA
+  // ---------------------------------------------------------
   async function refreshAll() {
-    console.log("Refreshing data…");
-
-    // Accounts
+    // ACCOUNTS
     const { data: acc } = await supabase
       .from("accounts")
       .select("*");
 
-    console.log("ACCOUNTS:", acc);
     if (acc) setAccounts(acc);
 
-    // Orders
+    // ORDERS
     const { data: ord } = await supabase
       .from("orders")
       .select("*")
       .order("created_at", { ascending: false });
 
-    console.log("ORDERS:", ord);
     if (ord) setOrders(ord);
 
-    // Payments (FIXED)
+    // PAYMENTS  *THIS WAS NOT LOADING BEFORE*
     const { data: pay } = await supabase
       .from("payments")
       .select("*")
       .order("created_at", { ascending: false });
 
-    console.log("PAYMENTS:", pay);  // <– IMPORTANT LOG  
     if (pay) setPayments(pay);
   }
 
-  /** Increase outstanding */
+  // ---------------------------------------------------------
+  // INCREASE OUTSTANDING
+  // ---------------------------------------------------------
   async function increaseOutstanding() {
     if (!selectedEmail) return alert("Select distributor");
     if (!amount || isNaN(amount)) return alert("Enter valid amount");
@@ -86,21 +94,25 @@ export default function Manufacturer() {
       amount: extra,
     });
 
-    if (error) {
-      alert("Error: " + error.message);
-      return;
-    }
+    if (error) return alert(error.message);
 
     await refreshAll();
     setAmount("");
-    alert("Outstanding updated successfully");
   }
 
-  if (!ready) return <p style={{ padding: 20 }}>Loading…</p>;
+  // ---------------------------------------------------------
+  // RENDERING
+  // ---------------------------------------------------------
+  if (loading) {
+    return <p style={{ padding: 20 }}>Loading…</p>;
+  }
+
+  if (!authorized) {
+    return <p style={{ padding: 20 }}>Unauthorized</p>;
+  }
 
   return (
     <div style={{ padding: 24, maxWidth: 1000, margin: "auto" }}>
-
       {/* HEADER */}
       <div
         style={{
@@ -120,46 +132,28 @@ export default function Manufacturer() {
         </p>
       </div>
 
-      {/* GRID */}
-      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 20 }}>
-
+      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 20 }}>
+        
         {/* LEFT SIDE */}
         <div>
-          {/* Outstanding List */}
+
+          {/* Outstanding Section */}
           <div
             style={{
               background: "#fff",
               padding: 16,
               borderRadius: 12,
               border: "1px solid #eee",
-              boxShadow: "0 3px 10px rgba(0,0,0,0.05)",
-              marginBottom: 14,
+              marginBottom: 20,
             }}
           >
-            <h2 style={{ fontSize: 18, fontWeight: 700 }}>Distributor Outstanding</h2>
+            <h2>Outstanding</h2>
 
-            {accounts.map((acc) => (
-              <div
-                key={acc.id}
-                style={{
-                  padding: 10,
-                  borderRadius: 8,
-                  background: "#fafafa",
-                  marginTop: 10,
-                }}
-              >
-                <div style={{ fontWeight: 700 }}>{acc.name}</div>
-                <div style={{ color: "#64748b", fontSize: 13 }}>{acc.email}</div>
-
-                <div
-                  style={{
-                    marginTop: 6,
-                    fontWeight: 700,
-                    color: "#ef4444",
-                  }}
-                >
-                  ₹ {acc.outstanding}
-                </div>
+            {accounts.map(acc => (
+              <div key={acc.id} style={{ padding: 10, marginTop: 10, background: "#fafafa", borderRadius: 8 }}>
+                <b>{acc.name}</b> ({acc.email})
+                <br />
+                <span style={{ color: "red" }}>₹ {acc.outstanding}</span>
               </div>
             ))}
           </div>
@@ -168,27 +162,20 @@ export default function Manufacturer() {
           <div
             style={{
               background: "#fff",
-              padding: 16,
+              padding: 18,
               borderRadius: 12,
               border: "1px solid #eee",
-              boxShadow: "0 3px 10px rgba(0,0,0,0.05)",
             }}
           >
-            <h2 style={{ fontSize: 18, fontWeight: 700 }}>Increase Outstanding</h2>
+            <h2>Increase Outstanding</h2>
 
             <select
               value={selectedEmail}
               onChange={(e) => setSelectedEmail(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #d1d5db",
-                marginTop: 8,
-              }}
+              style={{ width: "100%", padding: 10, borderRadius: 8, marginTop: 10 }}
             >
-              <option value="">Select Distributor</option>
-              {accounts.map((acc) => (
+              <option value="">Select distributor</option>
+              {accounts.map(acc => (
                 <option key={acc.email} value={acc.email}>
                   {acc.name} ({acc.email})
                 </option>
@@ -197,16 +184,10 @@ export default function Manufacturer() {
 
             <input
               type="number"
-              placeholder="Amount"
               value={amount}
+              placeholder="Amount"
               onChange={(e) => setAmount(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #d1d5db",
-                marginTop: 8,
-              }}
+              style={{ width: "100%", padding: 10, borderRadius: 8, marginTop: 10 }}
             />
 
             <button
@@ -219,7 +200,6 @@ export default function Manufacturer() {
                 color: "#fff",
                 borderRadius: 8,
                 border: "none",
-                cursor: "pointer",
               }}
             >
               Add
@@ -230,128 +210,67 @@ export default function Manufacturer() {
         {/* RIGHT SIDE */}
         <div>
 
-          {/* Orders */}
+          {/* PAYMENT HISTORY */}
           <div
             style={{
               background: "#fff",
               padding: 16,
               borderRadius: 12,
               border: "1px solid #eee",
-              boxShadow: "0 3px 10px rgba(0,0,0,0.05)",
-              marginBottom: 14,
+              marginBottom: 20,
             }}
           >
-            <h2 style={{ fontSize: 18, fontWeight: 700 }}>All Orders</h2>
-
-            {orders.length === 0 && (
-              <div style={{ color: "#64748b" }}>No orders yet</div>
-            )}
-
-            {orders.map((o) => (
-              <div
-                key={o.id}
-                style={{
-                  padding: 12,
-                  borderRadius: 10,
-                  border: "1px solid #f0f0f0",
-                  marginTop: 10,
-                }}
-              >
-                <div style={{ fontWeight: 700 }}>
-                  {o.from_name} ({o.from_email})
-                </div>
-
-                <div style={{ color: "#64748b", marginTop: 6 }}>
-                  ₹ {o.grand_total} — {o.items?.length || 0} items
-                </div>
-
-                <div
-                  style={{
-                    color: "#94a3b8",
-                    marginTop: 6,
-                    fontSize: 12,
-                  }}
-                >
-                  {new Date(o.created_at).toLocaleString()}
-                </div>
-
-                <a
-                  href={o.pdf_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    marginTop: 8,
-                    display: "inline-block",
-                    padding: "6px 10px",
-                    background: "#0ea5e9",
-                    color: "#fff",
-                    borderRadius: 8,
-                    textDecoration: "none",
-                  }}
-                >
-                  View PDF
-                </a>
-              </div>
-            ))}
-          </div>
-
-          {/* PAYMENT HISTORY — FIXED */}
-          <div
-            style={{
-              background: "#fff",
-              padding: 16,
-              borderRadius: 12,
-              border: "1px solid #eee",
-              boxShadow: "0 3px 10px rgba(0,0,0,0.05)",
-            }}
-          >
-            <h2 style={{ fontSize: 18, fontWeight: 700 }}>Payment History</h2>
+            <h2>Payment History</h2>
 
             {payments.length === 0 && (
-              <div style={{ color: "#64748b" }}>No payments yet</div>
+              <p style={{ color: "#6b7280" }}>No payments yet</p>
             )}
 
-            {payments.map((p) => (
+            {payments.map(p => (
               <div
                 key={p.id}
                 style={{
                   padding: 12,
                   borderRadius: 10,
-                  border: "1px solid #f0f0f0",
+                  border: "1px solid #eee",
                   marginTop: 10,
                 }}
               >
-                <div style={{ fontWeight: 700, fontSize: 16 }}>
-                  {p.name} ({p.email})
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 6,
-                    fontSize: 20,
-                    fontWeight: 700,
-                    color: "#16a34a",
-                  }}
-                >
-                  ₹ {p.amount}
-                </div>
-
-                <div style={{ color: "#64748b", marginTop: 6 }}>
-                  Note: {p.note || "—"}
-                </div>
-
-                <div
-                  style={{
-                    color: "#94a3b8",
-                    marginTop: 6,
-                    fontSize: 12,
-                  }}
-                >
+                <b>{p.name}</b> ({p.email})  
+                <br />
+                Amount: <b style={{ color: "green" }}>₹ {p.amount}</b>
+                <br />
+                Note: {p.note || "-"}
+                <br />
+                <span style={{ color: "#6b7280", fontSize: 12 }}>
                   {new Date(p.created_at).toLocaleString()}
-                </div>
+                </span>
               </div>
             ))}
+          </div>
 
+          {/* ORDERS */}
+          <div
+            style={{
+              background: "#fff",
+              padding: 16,
+              borderRadius: 12,
+              border: "1px solid #eee",
+            }}
+          >
+            <h2>All Orders</h2>
+
+            {orders.map(o => (
+              <div key={o.id} style={{ marginTop: 10, padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
+                <b>{o.from_name}</b> ({o.from_email})  
+                <br />
+                Total: <b>₹ {o.grand_total}</b>
+                <br />
+                <a href={o.pdf_url} target="_blank" style={{ color: "#2563eb" }}>
+                  View PDF
+                </a>
+              </div>
+            ))}
           </div>
 
         </div>
