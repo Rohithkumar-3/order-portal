@@ -19,6 +19,11 @@ export default function Distributor() {
   const [cart, setCart] = useState({});
   const [msg, setMsg] = useState("");
 
+  // Payment states
+  const [showPayBox, setShowPayBox] = useState(false);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMsg, setPayMsg] = useState("");
+
   const distributorNames = {
     "dist1@vfive.com": "Vijayakumar",
     "dist2@vfive.com": "Senthil Kumar",
@@ -79,6 +84,37 @@ export default function Distributor() {
     }
   }
 
+  // PAY NOW FUNCTION
+  async function payNow() {
+    if (!payAmount || isNaN(payAmount)) {
+      return setPayMsg("Enter valid amount.");
+    }
+
+    const amt = Number(payAmount);
+
+    const { error } = await supabase.rpc("increment_outstanding", {
+      email_input: email,
+      amount: -amt, // SUBTRACT
+    });
+
+    if (error) {
+      setPayMsg("Payment failed: " + error.message);
+      return;
+    }
+
+    const { data: acc } = await supabase
+      .from("accounts")
+      .select("outstanding")
+      .eq("email", email)
+      .single();
+
+    if (acc) setOutstanding(acc.outstanding);
+
+    setPayMsg("Payment successful!");
+    setPayAmount("");
+    setShowPayBox(false);
+  }
+
   if (!ready) return <p style={{ padding: 20 }}>Loading…</p>;
 
   return (
@@ -98,9 +134,48 @@ export default function Distributor() {
         <p style={{ color: "#64748b", margin: "4px 0" }}>
           Email: <b>{email}</b>
         </p>
-        <p style={{ color: "#64748b" }}>
-          Outstanding Amount: <b style={{ color: "#ef4444" }}>₹ {outstanding}</b>
-        </p>
+
+        {/* Outstanding Box */}
+        <div
+          style={{
+            background: "#fff",
+            marginTop: 12,
+            padding: 16,
+            borderRadius: 12,
+            border: "1px solid #eee",
+            boxShadow: "0 3px 10px rgba(0,0,0,0.05)",
+          }}
+        >
+          <div style={{ fontSize: 18, fontWeight: 600 }}>Outstanding Amount</div>
+
+          <div
+            style={{
+              fontSize: 22,
+              marginTop: 6,
+              fontWeight: 700,
+              color: "#ef4444",
+            }}
+          >
+            ₹ {outstanding}
+          </div>
+
+          <button
+            onClick={() => setShowPayBox(true)}
+            style={{
+              marginTop: 12,
+              padding: "10px 16px",
+              background: "#16a34a",
+              color: "#fff",
+              borderRadius: 10,
+              fontSize: 16,
+              border: "none",
+              cursor: "pointer",
+              boxShadow: "0 3px 10px rgba(22,163,74,0.3)",
+            }}
+          >
+            Pay Now
+          </button>
+        </div>
       </div>
 
       {/* Product Cards */}
@@ -167,6 +242,85 @@ export default function Distributor() {
       <p style={{ marginTop: 12, textAlign: "center", color: "#2563eb" }}>
         {msg}
       </p>
+
+      {/* Pay Popup Modal */}
+      {showPayBox && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 999,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 14,
+              width: "90%",
+              maxWidth: 350,
+              boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
+            }}
+          >
+            <h3 style={{ marginBottom: 10 }}>Make Payment</h3>
+
+            <input
+              type="number"
+              placeholder="Enter amount"
+              value={payAmount}
+              onChange={(e) => setPayAmount(e.target.value)}
+              style={{
+                width: "100%",
+                padding: 12,
+                borderRadius: 10,
+                border: "1px solid #d1d5db",
+                fontSize: 15,
+              }}
+            />
+
+            <button
+              onClick={payNow}
+              style={{
+                width: "100%",
+                marginTop: 12,
+                padding: 12,
+                background: "#2563eb",
+                color: "#fff",
+                borderRadius: 10,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Pay
+            </button>
+
+            <button
+              onClick={() => setShowPayBox(false)}
+              style={{
+                width: "100%",
+                marginTop: 8,
+                padding: 12,
+                background: "#e5e7eb",
+                color: "#000",
+                borderRadius: 10,
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+
+            <p style={{ color: "green", marginTop: 6 }}>{payMsg}</p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
