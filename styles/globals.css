@@ -1,9 +1,43 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* Custom defaults */
 body {
-  background: #f8f9fc;
-  font-family: sans-serif;
+  background: #f5f7fb;
+  font-family: 'Inter', sans-serif;
+}
+
+.card {
+  background: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  border: 1px solid #eee;
+}
+
+.btn {
+  padding: 10px 16px;
+  background: #2563eb;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.btn:hover {
+  background: #1e4fc7;
+}
+
+.heading {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.label {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.input {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #d0d7e2;
+  width: 100%;
 }
