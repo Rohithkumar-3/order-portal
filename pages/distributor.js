@@ -13,23 +13,20 @@ export default function Distributor() {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [cart, setCart] = useState({})
-  const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState("")
+  const [authReady, setAuthReady] = useState(false)
 
+  // 🔒 Protect Page
   useEffect(() => {
-    async function authenticate() {
+    async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession()
 
-      // No session → send to login
       if (!session) {
         window.location.href = "/"
         return
       }
 
       const userEmail = session.user.email
-      setEmail(userEmail)
-
-      // Allowed distributor emails
       const allowed = ["dist1@vfive.com", "dist2@vfive.com"]
 
       if (!allowed.includes(userEmail)) {
@@ -37,89 +34,77 @@ export default function Distributor() {
         return
       }
 
-      // NOW safe to load cart
+      setEmail(userEmail)
+      setAuthReady(true)
+    }
+
+    checkAuth()
+  }, [])
+
+  // 🛒 Load Cart AFTER auth
+  useEffect(() => {
+    if (authReady) {
       const initial = {}
       products.forEach(p => initial[p.id] = 0)
       setCart(initial)
-
-      setLoading(false)
     }
+  }, [authReady])
 
-    authenticate()
-  }, [])
-
-  // Update cart
-  function update(id, value) {
-    setCart(prev => ({ ...prev, [id]: Number(value) }))
+  function update(id, val) {
+    setCart(prev => ({ ...prev, [id]: Number(val) }))
   }
 
-  // Submit order
   async function submit() {
-    if (!email) {
-      alert("User email not detected.")
-      return
-    }
-
     const res = await fetch("/api/place-order", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ cart, from_email: email })
+      body: JSON.stringify({
+        cart,
+        from_email: email
+      })
     })
 
     const j = await res.json()
 
-    if (j.ok) setMsg("Order placed successfully.")
-    else setMsg("Error: " + j.error)
+    if (j.ok) setMsg("Order placed — manufacturer notified.")
+    else setMsg("Failed: " + (j.error || "unknown"))
   }
 
-  if (loading) return <p style={{ padding: 20 }}>Loading...</p>
+  if (!authReady) return <p style={{ padding: 20 }}>Loading...</p>
 
+  // 📦 OLD WORKING UI (unchanged)
   return (
     <div style={{ padding: 24 }}>
       <h1>Distributor — Place Order</h1>
 
-      <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+      <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
         {products.map(p => (
-          <div
-            key={p.id}
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              padding: 10,
-              background: "#fff",
-              borderRadius: 8
-            }}
-          >
+          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 10, background: '#fff', borderRadius: 8 }}>
             <div>
               <div style={{ fontWeight: 600 }}>{p.name}</div>
-              <div style={{ fontSize: 13, color: "#555" }}>₹ {p.rate}</div>
+              <div style={{ fontSize: 13, color: '#555' }}>₹ {p.rate}</div>
             </div>
 
             <input
               type="number"
               min={0}
               value={cart[p.id] || 0}
-              onChange={(e) => update(p.id, e.target.value)}
+              onChange={e => update(p.id, e.target.value)}
               style={{ width: 80, padding: 6 }}
             />
           </div>
         ))}
       </div>
 
-      <button
-        onClick={submit}
-        style={{
-          marginTop: 12,
-          padding: "10px 16px",
-          background: "#0ea5e9",
-          color: "#fff",
-          borderRadius: 6
-        }}
-      >
-        Submit Order
-      </button>
-
-      <div style={{ marginTop: 12 }}>{msg}</div>
+      <div style={{ marginTop: 12 }}>
+        <button
+          onClick={submit}
+          style={{ padding: '10px 16px', background: '#0ea5e9', color: '#fff', borderRadius: 6 }}
+        >
+          Submit Order
+        </button>
+        <span style={{ marginLeft: 12 }}>{msg}</span>
+      </div>
     </div>
   )
 }
