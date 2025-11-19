@@ -1,107 +1,98 @@
-import supabase from './supabase-client'
-import PDFDocument from 'pdfkit'
-import streamBuffers from 'stream-buffers'
-import products from '../../data/products.json'
+import supabase from "./supabase-client";
+import PDFDocument from "pdfkit";
+import streamBuffers from "stream-buffers";
+import products from "../../data/products.json";
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST')
-    return res.status(405).json({ error: 'Method not allowed' })
+  if (req.method !== "POST")
+    return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { cart, from_email } = req.body
+    const { cart, from_email, from_name } = req.body;
 
-    const items = []
-    let grandTotal = 0
+    const items = [];
+    let grand_total = 0;
 
-    // Build items list with totals
+    // Build items + total
     for (const p of products) {
-      const qty = Number(cart[p.id] || 0)
+      const qty = Number(cart[p.id] || 0);
       if (qty > 0) {
-        const lineTotal = qty * p.rate
-        grandTotal += lineTotal
+        const total = qty * p.rate;
+        grand_total += total;
 
         items.push({
           id: p.id,
           name: p.name,
           rate: p.rate,
           qty,
-          total: lineTotal
-        })
+          total,
+        });
       }
     }
 
-    // CREATE PDF
-    const doc = new PDFDocument({ margin: 40 })
-    const bufferStream = new streamBuffers.WritableStreamBuffer()
-    doc.pipe(bufferStream)
+    // PDF generation
+    const doc = new PDFDocument({ margin: 40 });
+    const bufferStream = new streamBuffers.WritableStreamBuffer();
+    doc.pipe(bufferStream);
 
-    // PDF Header
-    doc.fontSize(18).text('Order Notification', { align: 'center' })
-    doc.moveDown()
-    doc.fontSize(11).text(`From: ${from_email || 'Distributor'}`)
-    doc.text('Date: ' + new Date().toLocaleString())
-    doc.moveDown()
+    doc.fontSize(18).text("Order Notification", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(12).text(`Distributor Name: ${from_name}`);
+    doc.text(`Distributor Email: ${from_email}`);
+    doc.text(`Date: ${new Date().toLocaleString()}`);
+    doc.moveDown();
 
-    doc.fontSize(12).text('Items Ordered:')
-    doc.moveDown(0.5)
-
-    // Items in PDF
-    items.forEach(it => {
-      doc.fontSize(11).text(
-        `${it.name} — Qty: ${it.qty} × ₹${it.rate} = ₹${it.total.toFixed(2)}`
+    items.forEach((it) =>
+      doc.text(
+        `${it.name} — Qty: ${it.qty} — Rate: ₹${it.rate} — Total: ₹${it.total}`
       )
-    })
+    );
 
-    doc.moveDown(1)
+    doc.moveDown();
+    doc.fontSize(14).text(`Grand Total: ₹${grand_total}`);
 
-    // GRAND TOTAL
-    doc.fontSize(14).text(`Grand Total: ₹${grandTotal.toFixed(2)}`, {
-      align: 'right'
-    })
+    doc.end();
+    await new Promise((r) => doc.on("end", r));
 
-    doc.end()
-    await new Promise(r => doc.on('end', r))
+    const pdfBuffer = bufferStream.getContents();
 
-    const pdfBuffer = bufferStream.getContents()
+    const fileName = `order_${Date.now()}.pdf`;
 
-    // File name
-    const fileName = `order_${Date.now()}.pdf`
-
-    // UPLOAD PDF
-    const { error: upErr } = await supabase.storage
-      .from('orders')
+    const { error: uploadErr } = await supabase.storage
+      .from("orders")
       .upload(fileName, pdfBuffer, {
-        contentType: 'application/pdf',
-      })
+        contentType: "application/pdf",
+      });
 
-    if (upErr) throw upErr
+    if (uploadErr) throw uploadErr;
 
-    // PUBLIC URL
     const { data: urlData } = supabase.storage
-      .from('orders')
-      .getPublicUrl(fileName)
+      .from("orders")
+      .getPublicUrl(fileName);
 
-    const publicUrl = urlData.publicUrl
+    const { publicUrl } = urlData;
 
-    // SAVE IN DATABASE
-    const { error: insErr } = await supabase
-      .from('orders')
-      .insert([
-        {
-          from_email,
-          pdf_path: fileName,
-          pdf_url: publicUrl,
-          items,               // clean JSON
-          grand_total: grandTotal  // number only
-        },
-      ])
+    // Insert into orders table
+    await supabase.from("orders").insert([
+      {
+        from_email,
+        from_name,
+        pdf_path: fileName,
+        pdf_url: publicUrl,
+        items,
+        grand_total,
+      },
+    ]);
 
-    if (insErr) throw insErr
+    // *** UPDATE OUTSTANDING HERE ***
+    await supabase.rpc("increment_outstanding", {
+      email_input: from_email,
+      amount: grand_total,
+    });
 
-    return res.json({ ok: true })
-
+    return res.json({ ok: true });
   } catch (err) {
-    console.error(err)
-    return res.status(500).json({ error: String(err) })
+    console.error("Order Error:", err);
+    return res.status(500).json({ error: err.message || String(err) });
   }
 }
