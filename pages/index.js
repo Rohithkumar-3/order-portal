@@ -1,94 +1,154 @@
-import { useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
-import { useRouter } from 'next/router'
+import { useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+import { useRouter } from "next/router";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+);
 
 export default function Home() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const router = useRouter()
+  const router = useRouter();
 
-  async function loginOnly(e) {
-    e.preventDefault()
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [msg, setMsg] = useState("");
 
-    // Allowed email list
-    const allowedEmails = [
-      "dist1@vfive.com",
-      "dist2@vfive.com",
-      "manu@vfive.com"
-    ]
+  async function login(e) {
+    e.preventDefault();
 
-    // Block if email not allowed
-    if (!allowedEmails.includes(email)) {
-      alert("Access Denied: You are not authorized.")
-      return
-    }
-
-    // LOGIN ONLY – NO SIGNUP
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
-      password
-    })
+      password,
+    });
 
-    if (error) {
-      alert("Incorrect password")
-      return
-    }
+    if (error) return setMsg(error.message);
 
-    // Redirect based on email
-    if (email === "manu@vfive.com") {
-      router.push("/manufacturer")
+    // Redirect based on role
+    const lower = email.toLowerCase();
+
+    if (lower === "manu@vfive.com") {
+      router.push("/manufacturer");
+    } else if (
+      lower === "dist1@vfive.com" ||
+      lower === "dist2@vfive.com"
+    ) {
+      router.push("/distributor");
     } else {
-      router.push("/distributor")
+      setMsg("Unauthorized login.");
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        background: "#f5f7fb",
+        padding: 20,
+      }}
+    >
       <form
-        onSubmit={loginOnly}
+        onSubmit={login}
         style={{
-          maxWidth: 420,
           width: "100%",
+          maxWidth: 420,
           background: "#fff",
-          padding: 20,
-          borderRadius: 8,
-          boxShadow: "0 6px 20px rgba(0,0,0,0.06)"
+          padding: 32,
+          borderRadius: 16,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+          border: "1px solid #eee",
         }}
       >
-        <h2 style={{ marginBottom: 12 }}>VFive Company Portal — Login</h2>
+        <h2
+          style={{
+            fontSize: 28,
+            fontWeight: 700,
+            textAlign: "center",
+            marginBottom: 20,
+            color: "#1e293b",
+          }}
+        >
+          V-Five Login
+        </h2>
 
-        <input
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ width: "100%", padding: 8, marginBottom: 8 }}
-        />
+        <div style={{ marginBottom: 14 }}>
+          <label
+            style={{ fontSize: 14, fontWeight: 500, color: "#475569" }}
+          >
+            Email
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            style={{
+              width: "100%",
+              padding: 12,
+              marginTop: 6,
+              borderRadius: 10,
+              border: "1px solid #d1d5db",
+              fontSize: 15,
+            }}
+          />
+        </div>
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{ width: "100%", padding: 8, marginBottom: 8 }}
-        />
+        <div style={{ marginBottom: 18 }}>
+          <label
+            style={{ fontSize: 14, fontWeight: 500, color: "#475569" }}
+          >
+            Password
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            style={{
+              width: "100%",
+              padding: 12,
+              marginTop: 6,
+              borderRadius: 10,
+              border: "1px solid #d1d5db",
+              fontSize: 15,
+            }}
+          />
+        </div>
 
         <button
+          type="submit"
           style={{
             width: "100%",
-            padding: 10,
+            padding: 14,
             background: "#2563eb",
             color: "#fff",
-            borderRadius: 6
+            borderRadius: 10,
+            fontWeight: 600,
+            fontSize: 17,
+            border: "none",
+            cursor: "pointer",
+            boxShadow: "0 4px 12px rgba(37,99,235,0.3)",
           }}
         >
           Login
         </button>
+
+        {msg && (
+          <p
+            style={{
+              marginTop: 12,
+              textAlign: "center",
+              color: "red",
+              fontSize: 14,
+            }}
+          >
+            {msg}
+          </p>
+        )}
       </form>
     </div>
-  )
+  );
 }
