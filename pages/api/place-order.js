@@ -10,12 +10,10 @@ export default async function handler(req, res) {
   try {
     const { cart, from_email, from_name } = req.body;
 
-    console.log("API RECEIVED NAME:", from_name, "EMAIL:", from_email);
-
     let items = [];
     let grand_total = 0;
 
-    // Build order items
+    // Build items
     for (const p of products) {
       const qty = Number(cart[p.id] || 0);
       if (qty > 0) {
@@ -32,10 +30,10 @@ export default async function handler(req, res) {
       }
     }
 
-    // Generate PDF
+    // PDF
     const doc = new PDFDocument({ margin: 40 });
-    const bufferStream = new streamBuffers.WritableStreamBuffer();
-    doc.pipe(bufferStream);
+    const stream = new streamBuffers.WritableStreamBuffer();
+    doc.pipe(stream);
 
     doc.fontSize(18).text("Order Notification", { align: "center" });
     doc.moveDown();
@@ -46,45 +44,45 @@ export default async function handler(req, res) {
     doc.moveDown();
 
     items.forEach((it) =>
-      doc.text(`${it.name} — Qty: ${it.qty} — Rate: ₹${it.rate} — Total: ₹${it.total}`)
+      doc.text(
+        `${it.name} — Qty: ${it.qty} — Rate: ₹${it.rate} — Total: ₹${it.total}`
+      )
     );
 
     doc.moveDown();
-    doc.fontSize(14).text(`Grand Total: ₹${grand_total}`, { underline: true });
+    doc.fontSize(14).text(`Grand Total: ₹${grand_total}`, {
+      underline: true,
+    });
 
     doc.end();
-    await new Promise((resolve) => doc.on("end", resolve));
+    await new Promise((r) => doc.on("end", r));
 
-    const pdfBuffer = bufferStream.getContents();
-
+    const pdfBuffer = stream.getContents();
     const fileName = `order_${Date.now()}.pdf`;
 
     await supabase.storage
       .from("orders")
-      .upload(fileName, pdfBuffer, {
-        contentType: "application/pdf",
-      });
+      .upload(fileName, pdfBuffer, { contentType: "application/pdf" });
 
-    const { data: urlData } = supabase
-      .storage
+    const { data: urlData } = supabase.storage
       .from("orders")
       .getPublicUrl(fileName);
 
-    const pdf_url = urlData.publicUrl;
-
-    // Insert order record
-    await supabase.from("orders").insert([
+    // INSERT ORDER
+    const { error: insertErr } = await supabase.from("orders").insert([
       {
         from_email,
         from_name,
         pdf_path: fileName,
-        pdf_url,
+        pdf_url: urlData.publicUrl,
         items,
         grand_total,
       },
     ]);
 
-    // Update outstanding amount
+    if (insertErr) throw insertErr;
+
+    // UPDATE OUTSTANDING
     await supabase.rpc("increment_outstanding", {
       email_input: from_email,
       amount: grand_total,
@@ -92,7 +90,7 @@ export default async function handler(req, res) {
 
     return res.json({ ok: true });
   } catch (err) {
-    console.error("ORDER ERROR:", err);
+    console.error("ERROR:", err);
     return res.status(500).json({ error: err.message || String(err) });
   }
 }
