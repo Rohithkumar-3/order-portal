@@ -14,46 +14,49 @@ export default function Distributor() {
   const [email, setEmail] = useState("")
   const [cart, setCart] = useState({})
   const [msg, setMsg] = useState("")
-  const [authReady, setAuthReady] = useState(false)
+  const [ready, setReady] = useState(false)
 
-  // 🔒 Protect Page
   useEffect(() => {
-    async function checkAuth() {
+    async function protect() {
+
+      // 1. GET SESSION
       const { data: { session } } = await supabase.auth.getSession()
 
+      // If NOT logged in → redirect
       if (!session) {
-        window.location.href = "/"
+        router.push("/")
         return
       }
 
       const userEmail = session.user.email
       const allowed = ["dist1@vfive.com", "dist2@vfive.com"]
 
+      // If email NOT allowed → redirect
       if (!allowed.includes(userEmail)) {
-        window.location.href = "/"
+        router.push("/")
         return
       }
 
+      // Authorized user → continue
       setEmail(userEmail)
-      setAuthReady(true)
+
+      // Initialize cart after login
+      const c = {}
+      products.forEach(p => c[p.id] = 0)
+      setCart(c)
+
+      setReady(true)
     }
 
-    checkAuth()
+    protect()
   }, [])
 
-  // 🛒 Load Cart AFTER auth
-  useEffect(() => {
-    if (authReady) {
-      const initial = {}
-      products.forEach(p => initial[p.id] = 0)
-      setCart(initial)
-    }
-  }, [authReady])
-
+  // UPDATE CART
   function update(id, val) {
     setCart(prev => ({ ...prev, [id]: Number(val) }))
   }
 
+  // SUBMIT ORDER
   async function submit() {
     const res = await fetch("/api/place-order", {
       method: "POST",
@@ -65,24 +68,29 @@ export default function Distributor() {
     })
 
     const j = await res.json()
-
-    if (j.ok) setMsg("Order placed — manufacturer notified.")
-    else setMsg("Failed: " + (j.error || "unknown"))
+    setMsg(j.ok ? "Order placed!" : ("Error: " + j.error))
   }
 
-  if (!authReady) return <p style={{ padding: 20 }}>Loading...</p>
+  // SHOW LOADING UNTIL AUTH CHECKED
+  if (!ready) return <p style={{ padding: 20 }}>Checking Authorization...</p>
 
-  // 📦 OLD WORKING UI (unchanged)
+  // FINAL UI
   return (
     <div style={{ padding: 24 }}>
       <h1>Distributor — Place Order</h1>
 
       <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
         {products.map(p => (
-          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 10, background: '#fff', borderRadius: 8 }}>
+          <div key={p.id} style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            padding: 10,
+            background: '#fff',
+            borderRadius: 8
+          }}>
             <div>
               <div style={{ fontWeight: 600 }}>{p.name}</div>
-              <div style={{ fontSize: 13, color: '#555' }}>₹ {p.rate}</div>
+              <div style={{ color: '#555', fontSize: 13 }}>₹ {p.rate}</div>
             </div>
 
             <input
@@ -96,15 +104,20 @@ export default function Distributor() {
         ))}
       </div>
 
-      <div style={{ marginTop: 12 }}>
-        <button
-          onClick={submit}
-          style={{ padding: '10px 16px', background: '#0ea5e9', color: '#fff', borderRadius: 6 }}
-        >
-          Submit Order
-        </button>
-        <span style={{ marginLeft: 12 }}>{msg}</span>
-      </div>
+      <button
+        onClick={submit}
+        style={{
+          marginTop: 12,
+          padding: "10px 16px",
+          background: "#0ea5e9",
+          color: "#fff",
+          borderRadius: 6
+        }}
+      >
+        Submit Order
+      </button>
+
+      <div style={{ marginTop: 12 }}>{msg}</div>
     </div>
   )
 }
