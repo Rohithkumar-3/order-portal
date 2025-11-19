@@ -73,7 +73,7 @@ export default function Distributor() {
 
     const j = await res.json();
     if (j.ok) {
-      setMsg("Order placed!");
+      setMsg("Order placed successfully!");
     } else {
       setMsg("Failed: " + j.error);
     }
@@ -82,26 +82,49 @@ export default function Distributor() {
   if (!ready) return <p style={{ padding: 20 }}>Loading…</p>;
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1>Distributor — {name}</h1>
-      <p><b>Email:</b> {email}</p>
-      <p><b>Outstanding:</b> ₹ {outstanding}</p>
+    <div style={{ padding: 24, maxWidth: 650, margin: "auto" }}>
 
-      <div style={{ display: "grid", gap: 10, marginTop: 20 }}>
+      {/* Header Card */}
+      <div style={{
+        background: "#fff",
+        padding: 22,
+        borderRadius: 14,
+        boxShadow: "0 4px 14px rgba(0,0,0,0.08)",
+        border: "1px solid #eee"
+      }}>
+        <h1 style={{ marginBottom: 6, fontSize: 26, fontWeight: 700 }}>
+          Distributor — {name}
+        </h1>
+        <p style={{ color: "#64748b", margin: "4px 0" }}>
+          Email: <b>{email}</b>
+        </p>
+        <p style={{ color: "#64748b" }}>
+          Outstanding Amount: <b style={{ color: "#ef4444" }}>₹ {outstanding}</b>
+        </p>
+      </div>
+
+      {/* Product Cards */}
+      <div style={{ marginTop: 22 }}>
         {products.map((p) => (
           <div
             key={p.id}
             style={{
-              padding: 10,
               background: "#fff",
-              borderRadius: 8,
+              padding: 18,
+              borderRadius: 14,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+              border: "1px solid #eee",
+              marginBottom: 14,
               display: "flex",
               justifyContent: "space-between",
+              alignItems: "center"
             }}
           >
             <div>
-              <div style={{ fontWeight: 600 }}>{p.name}</div>
-              <div style={{ fontSize: 13, color: "#555" }}>₹ {p.rate}</div>
+              <div style={{ fontSize: 18, fontWeight: 600 }}>{p.name}</div>
+              <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>
+                ₹ {p.rate}
+              </div>
             </div>
 
             <input
@@ -109,26 +132,41 @@ export default function Distributor() {
               min="0"
               value={cart[p.id] || 0}
               onChange={(e) => update(p.id, e.target.value)}
-              style={{ width: 80, padding: 6 }}
+              style={{
+                width: 90,
+                padding: 10,
+                borderRadius: 10,
+                border: "1px solid #d1d5db",
+                fontSize: 15
+              }}
             />
           </div>
         ))}
       </div>
 
+      {/* Submit Button */}
       <button
         onClick={submit}
         style={{
           marginTop: 20,
-          padding: "10px 16px",
-          background: "#0ea5e9",
+          width: "100%",
+          padding: "14px 10px",
+          background: "#2563eb",
           color: "#fff",
-          borderRadius: 6,
+          borderRadius: 10,
+          fontSize: 17,
+          fontWeight: 600,
+          boxShadow: "0 3px 10px rgba(37,99,235,0.3)",
+          border: "none",
+          cursor: "pointer"
         }}
       >
         Submit Order
       </button>
 
-      <p style={{ marginTop: 10 }}>{msg}</p>
+      <p style={{ marginTop: 12, textAlign: "center", color: "#2563eb" }}>
+        {msg}
+      </p>
     </div>
   );
 }
