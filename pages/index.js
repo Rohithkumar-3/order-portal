@@ -17,59 +17,69 @@ export default function Home() {
   async function login(e) {
     e.preventDefault();
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) return setMsg(error.message);
 
+    // Redirect based on role
     const lower = email.toLowerCase();
 
-    if (lower === "manu@vfive.com") router.push("/manufacturer");
-    else if (lower === "dist1@vfive.com" || lower === "dist2@vfive.com")
+    if (lower === "manu@vfive.com") {
+      router.push("/manufacturer");
+    } else if (
+      lower === "dist1@vfive.com" ||
+      lower === "dist2@vfive.com"
+    ) {
       router.push("/distributor");
-    else setMsg("Unauthorized login");
+    } else {
+      setMsg("Unauthorized login.");
+    }
   }
 
   return (
     <div
       style={{
         minHeight: "100vh",
-        background:
-          "linear-gradient(135deg, #1d4ed8 0%, #9333ea 50%, #ec4899 100%)",
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
+        background: "#f5f7fb",
         padding: 20,
       }}
     >
-      <div
+      <form
+        onSubmit={login}
         style={{
           width: "100%",
           maxWidth: 420,
-          background: "rgba(255,255,255,0.12)",
-          borderRadius: 20,
+          background: "#fff",
           padding: 32,
-          boxShadow: "0 15px 40px rgba(0,0,0,0.30)",
-          backdropFilter: "blur(14px)",
-          border: "1px solid rgba(255,255,255,0.25)",
+          borderRadius: 16,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+          border: "1px solid #eee",
         }}
       >
         <h2
           style={{
-            textAlign: "center",
-            color: "#fff",
-            fontSize: 30,
+            fontSize: 28,
             fontWeight: 700,
+            textAlign: "center",
             marginBottom: 20,
+            color: "#1e293b",
           }}
         >
-          V-Five Portal
+          V-Five Login
         </h2>
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ color: "#e2e8f0" }}>Email</label>
+        <div style={{ marginBottom: 14 }}>
+          <label
+            style={{ fontSize: 14, fontWeight: 500, color: "#475569" }}
+          >
+            Email
+          </label>
           <input
             type="email"
             value={email}
@@ -77,18 +87,21 @@ export default function Home() {
             required
             style={{
               width: "100%",
-              padding: 14,
-              borderRadius: 12,
-              background: "rgba(255,255,255,0.25)",
-              border: "1px solid rgba(255,255,255,0.3)",
-              color: "#fff",
+              padding: 12,
               marginTop: 6,
+              borderRadius: 10,
+              border: "1px solid #d1d5db",
+              fontSize: 15,
             }}
           />
         </div>
 
         <div style={{ marginBottom: 18 }}>
-          <label style={{ color: "#e2e8f0" }}>Password</label>
+          <label
+            style={{ fontSize: 14, fontWeight: 500, color: "#475569" }}
+          >
+            Password
+          </label>
           <input
             type="password"
             value={password}
@@ -96,41 +109,46 @@ export default function Home() {
             required
             style={{
               width: "100%",
-              padding: 14,
-              borderRadius: 12,
-              background: "rgba(255,255,255,0.25)",
-              border: "1px solid rgba(255,255,255,0.3)",
-              color: "#fff",
+              padding: 12,
               marginTop: 6,
+              borderRadius: 10,
+              border: "1px solid #d1d5db",
+              fontSize: 15,
             }}
           />
         </div>
 
         <button
-          onClick={login}
+          type="submit"
           style={{
             width: "100%",
-            padding: 15,
-            background: "#fff",
-            color: "#1d4ed8",
-            fontWeight: 700,
+            padding: 14,
+            background: "#2563eb",
+            color: "#fff",
+            borderRadius: 10,
+            fontWeight: 600,
             fontSize: 17,
-            borderRadius: 14,
             border: "none",
             cursor: "pointer",
-            boxShadow: "0 6px 16px rgba(255,255,255,0.3)",
-            marginTop: 10,
+            boxShadow: "0 4px 12px rgba(37,99,235,0.3)",
           }}
         >
           Login
         </button>
 
         {msg && (
-          <p style={{ color: "#fff", marginTop: 12, textAlign: "center" }}>
+          <p
+            style={{
+              marginTop: 12,
+              textAlign: "center",
+              color: "red",
+              fontSize: 14,
+            }}
+          >
             {msg}
           </p>
         )}
-      </div>
+      </form>
     </div>
   );
 }
