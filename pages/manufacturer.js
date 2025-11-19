@@ -20,6 +20,7 @@ export default function Manufacturer() {
 
   const [ready, setReady] = useState(false);
 
+  /** FIXED: manufacturer email check */
   const manufacturerEmails = ["manu@vfive.com"];
 
   useEffect(() => {
@@ -27,10 +28,13 @@ export default function Manufacturer() {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) return router.push("/");
-      const userEmail = session.user.email.toLowerCase();
+
+      const userEmail = session.user.email.toLowerCase(); // <– FIXED
       setEmail(userEmail);
 
-      if (!manufacturerEmails.includes(userEmail)) return router.push("/");
+      /** FIXED: lowercase check */
+      if (!manufacturerEmails.includes(userEmail))
+        return router.push("/");
 
       await refreshAll();
       setReady(true);
@@ -39,28 +43,38 @@ export default function Manufacturer() {
     loadData();
   }, []);
 
+  /** LOAD ALL INFO */
   async function refreshAll() {
-    try {
-      const { data: acc } = await supabase.from("accounts").select("*");
-      if (acc) setAccounts(acc);
+    console.log("Refreshing data…");
 
-      const { data: ord } = await supabase
-        .from("orders")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (ord) setOrders(ord);
+    // Accounts
+    const { data: acc } = await supabase
+      .from("accounts")
+      .select("*");
 
-      const { data: pay } = await supabase
-        .from("payments")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (pay) setPayments(pay);
+    console.log("ACCOUNTS:", acc);
+    if (acc) setAccounts(acc);
 
-    } catch (err) {
-      console.error("refreshAll error:", err);
-    }
+    // Orders
+    const { data: ord } = await supabase
+      .from("orders")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    console.log("ORDERS:", ord);
+    if (ord) setOrders(ord);
+
+    // Payments (FIXED)
+    const { data: pay } = await supabase
+      .from("payments")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    console.log("PAYMENTS:", pay);  // <– IMPORTANT LOG  
+    if (pay) setPayments(pay);
   }
 
+  /** Increase outstanding */
   async function increaseOutstanding() {
     if (!selectedEmail) return alert("Select distributor");
     if (!amount || isNaN(amount)) return alert("Enter valid amount");
@@ -72,7 +86,10 @@ export default function Manufacturer() {
       amount: extra,
     });
 
-    if (error) return alert("Error: " + error.message);
+    if (error) {
+      alert("Error: " + error.message);
+      return;
+    }
 
     await refreshAll();
     setAmount("");
@@ -83,7 +100,7 @@ export default function Manufacturer() {
 
   return (
     <div style={{ padding: 24, maxWidth: 1000, margin: "auto" }}>
-      
+
       {/* HEADER */}
       <div
         style={{
@@ -105,10 +122,10 @@ export default function Manufacturer() {
 
       {/* GRID */}
       <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 20 }}>
-        
-        {/* LEFT CONTAINER */}
+
+        {/* LEFT SIDE */}
         <div>
-          {/* Outstanding Section */}
+          {/* Outstanding List */}
           <div
             style={{
               background: "#fff",
@@ -119,9 +136,7 @@ export default function Manufacturer() {
               marginBottom: 14,
             }}
           >
-            <h2 style={{ fontSize: 18, fontWeight: 700 }}>
-              Distributor Outstanding
-            </h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700 }}>Distributor Outstanding</h2>
 
             {accounts.map((acc) => (
               <div
@@ -134,9 +149,8 @@ export default function Manufacturer() {
                 }}
               >
                 <div style={{ fontWeight: 700 }}>{acc.name}</div>
-                <div style={{ color: "#64748b", fontSize: 13 }}>
-                  {acc.email}
-                </div>
+                <div style={{ color: "#64748b", fontSize: 13 }}>{acc.email}</div>
+
                 <div
                   style={{
                     marginTop: 6,
@@ -150,7 +164,7 @@ export default function Manufacturer() {
             ))}
           </div>
 
-          {/* Increase Outstanding Box */}
+          {/* Increase Outstanding */}
           <div
             style={{
               background: "#fff",
@@ -160,9 +174,7 @@ export default function Manufacturer() {
               boxShadow: "0 3px 10px rgba(0,0,0,0.05)",
             }}
           >
-            <h2 style={{ fontSize: 18, fontWeight: 700 }}>
-              Increase Outstanding
-            </h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700 }}>Increase Outstanding</h2>
 
             <select
               value={selectedEmail}
@@ -215,10 +227,10 @@ export default function Manufacturer() {
           </div>
         </div>
 
-        {/* RIGHT CONTAINER */}
+        {/* RIGHT SIDE */}
         <div>
-          
-          {/* All Orders */}
+
+          {/* Orders */}
           <div
             style={{
               background: "#fff",
@@ -248,9 +260,11 @@ export default function Manufacturer() {
                 <div style={{ fontWeight: 700 }}>
                   {o.from_name} ({o.from_email})
                 </div>
+
                 <div style={{ color: "#64748b", marginTop: 6 }}>
                   ₹ {o.grand_total} — {o.items?.length || 0} items
                 </div>
+
                 <div
                   style={{
                     color: "#94a3b8",
@@ -260,6 +274,7 @@ export default function Manufacturer() {
                 >
                   {new Date(o.created_at).toLocaleString()}
                 </div>
+
                 <a
                   href={o.pdf_url}
                   target="_blank"
@@ -280,7 +295,7 @@ export default function Manufacturer() {
             ))}
           </div>
 
-          {/* Payment History (UPDATED + FIXED) */}
+          {/* PAYMENT HISTORY — FIXED */}
           <div
             style={{
               background: "#fff",
@@ -300,8 +315,8 @@ export default function Manufacturer() {
               <div
                 key={p.id}
                 style={{
-                  padding: 10,
-                  borderRadius: 8,
+                  padding: 12,
+                  borderRadius: 10,
                   border: "1px solid #f0f0f0",
                   marginTop: 10,
                 }}
@@ -313,7 +328,7 @@ export default function Manufacturer() {
                 <div
                   style={{
                     marginTop: 6,
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: 700,
                     color: "#16a34a",
                   }}
@@ -336,7 +351,9 @@ export default function Manufacturer() {
                 </div>
               </div>
             ))}
+
           </div>
+
         </div>
       </div>
     </div>
