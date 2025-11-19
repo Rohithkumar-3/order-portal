@@ -18,18 +18,23 @@ export default function Distributor() {
 
   useEffect(() => {
     async function protect() {
-
-      // 1. GET SESSION
       const { data: { session } } = await supabase.auth.getSession()
 
-      // If NOT logged in → redirect
+      // If not logged in → redirect
       if (!session) {
         router.push("/")
         return
       }
 
-      const userEmail = session.user.email
-      const allowed = ["dist1@vfive.com", "dist2@vfive.com"]
+      // Convert email to lowercase (fixes mismatch issue)
+      const userEmail = session.user.email.toLowerCase()
+      setEmail(userEmail)
+
+      // Allowed distributors
+      const allowed = [
+        "dist1@vfive.com",
+        "dist2@vfive.com"
+      ]
 
       // If email NOT allowed → redirect
       if (!allowed.includes(userEmail)) {
@@ -37,10 +42,7 @@ export default function Distributor() {
         return
       }
 
-      // Authorized user → continue
-      setEmail(userEmail)
-
-      // Initialize cart after login
+      // Initialize cart after auth
       const c = {}
       products.forEach(p => c[p.id] = 0)
       setCart(c)
@@ -51,12 +53,12 @@ export default function Distributor() {
     protect()
   }, [])
 
-  // UPDATE CART
+  // Update cart
   function update(id, val) {
     setCart(prev => ({ ...prev, [id]: Number(val) }))
   }
 
-  // SUBMIT ORDER
+  // Submit order
   async function submit() {
     const res = await fetch("/api/place-order", {
       method: "POST",
@@ -68,17 +70,15 @@ export default function Distributor() {
     })
 
     const j = await res.json()
-    setMsg(j.ok ? "Order placed!" : ("Error: " + j.error))
+    setMsg(j.ok ? "Order placed — manufacturer notified." : "Failed: " + j.error)
   }
 
-  // SHOW LOADING UNTIL AUTH CHECKED
   if (!ready) return <p style={{ padding: 20 }}>Checking Authorization...</p>
 
-  // FINAL UI
+  // ---- OLD WORKING UI (no changes) ----
   return (
     <div style={{ padding: 24 }}>
       <h1>Distributor — Place Order</h1>
-
       <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
         {products.map(p => (
           <div key={p.id} style={{
@@ -90,34 +90,30 @@ export default function Distributor() {
           }}>
             <div>
               <div style={{ fontWeight: 600 }}>{p.name}</div>
-              <div style={{ color: '#555', fontSize: 13 }}>₹ {p.rate}</div>
+              <div style={{ fontSize: 13, color: '#555' }}>₹ {p.rate}</div>
             </div>
-
-            <input
-              type="number"
-              min={0}
-              value={cart[p.id] || 0}
-              onChange={e => update(p.id, e.target.value)}
-              style={{ width: 80, padding: 6 }}
-            />
+            <div>
+              <input
+                type="number"
+                min={0}
+                value={cart[p.id] || 0}
+                onChange={e => update(p.id, e.target.value)}
+                style={{ width: 80, padding: 6 }}
+              />
+            </div>
           </div>
         ))}
       </div>
 
-      <button
-        onClick={submit}
-        style={{
-          marginTop: 12,
-          padding: "10px 16px",
-          background: "#0ea5e9",
-          color: "#fff",
-          borderRadius: 6
-        }}
-      >
-        Submit Order
-      </button>
-
-      <div style={{ marginTop: 12 }}>{msg}</div>
+      <div style={{ marginTop: 12 }}>
+        <button
+          onClick={submit}
+          style={{ padding: "10px 16px", background: "#0ea5e9", color: "#fff", borderRadius: 6 }}
+        >
+          Submit Order
+        </button>
+        <span style={{ marginLeft: 12 }}>{msg}</span>
+      </div>
     </div>
   )
 }
