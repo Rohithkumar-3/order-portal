@@ -14,23 +14,20 @@ export default function Manufacturer() {
   const [accounts, setAccounts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [payments, setPayments] = useState([]);
-
   const [amount, setAmount] = useState("");
   const [selectedEmail, setSelectedEmail] = useState("");
-
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    async function loadData() {
+    async function loadAll() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return router.push("/");
 
-      const userEmail = session.user.email.toLowerCase();
-      setEmail(userEmail);
+      const logged = session.user.email.toLowerCase();
+      if (logged !== "manu@vfive.com") return router.push("/");
+      setEmail(logged);
 
-      if (userEmail !== "manu@vfive.com") return router.push("/");
-
-      // Load accounts/outstanding
+      // Load accounts
       const { data: acc } = await supabase.from("accounts").select("*");
       setAccounts(acc || []);
 
@@ -39,26 +36,24 @@ export default function Manufacturer() {
         .from("orders")
         .select("*")
         .order("id", { ascending: false });
-
       setOrders(ord || []);
 
-      // Load payments
+      // 🚨 FIX: Load ALL payments — NOT filtered
       const { data: pays } = await supabase
         .from("payments")
         .select("*")
         .order("id", { ascending: false });
-
       setPayments(pays || []);
 
       setReady(true);
     }
-
-    loadData();
+    loadAll();
   }, []);
 
+  // Increase outstanding
   async function increaseOutstanding() {
     if (!selectedEmail) return alert("Select distributor");
-    if (!amount) return alert("Enter valid amount");
+    if (!amount) return alert("Enter amount");
 
     const { error } = await supabase.rpc("increment_outstanding", {
       email_input: selectedEmail,
@@ -67,51 +62,50 @@ export default function Manufacturer() {
 
     if (error) return alert(error.message);
 
-    // refresh outstanding
+    // Refresh accounts after update
     const { data: acc } = await supabase.from("accounts").select("*");
     setAccounts(acc || []);
-    setAmount("");
   }
 
-  if (!ready) return <p style={{ padding: 20 }}>Loading…</p>;
+  if (!ready) return <p style={{ padding: 20 }}>Loading...</p>;
 
   return (
     <div style={{
       display: "flex",
-      gap: "20px",
-      padding: "24px",
-      maxWidth: "1300px",
+      gap: 20,
+      padding: 24,
+      maxWidth: 1300,
       margin: "auto"
     }}>
       
-      {/* LEFT SIDE — MAIN DASHBOARD */}
+      {/* LEFT SIDE */}
       <div style={{ flex: 2 }}>
         <h1>Manufacturer Dashboard</h1>
         <p><b>Logged in as:</b> {email}</p>
 
         {/* Outstanding */}
-        <h2 style={{ marginTop: 20 }}>Distributor Outstanding Amounts</h2>
+        <h2 style={{ marginTop: 20 }}>Distributor Outstanding</h2>
         {accounts.map(acc => (
           <div key={acc.id} style={{
-            padding: 12,
             background: "#fff",
-            borderRadius: 8,
-            marginBottom: 12,
-            border: "1px solid #ddd"
+            padding: 14,
+            borderRadius: 10,
+            border: "1px solid #ddd",
+            marginBottom: 10
           }}>
-            <p><b>Name:</b> {acc.name}</p>
-            <p><b>Email:</b> {acc.email}</p>
+            <p><b>{acc.name}</b></p>
+            <p>{acc.email}</p>
             <p><b>Outstanding:</b> ₹ {acc.outstanding}</p>
           </div>
         ))}
 
         {/* Increase Outstanding */}
-        <h2 style={{ marginTop: 30 }}>Increase Outstanding</h2>
+        <h2 style={{ marginTop: 25 }}>Increase Outstanding</h2>
 
         <select
           value={selectedEmail}
           onChange={(e) => setSelectedEmail(e.target.value)}
-          style={{ padding: 10, width: 260 }}
+          style={{ padding: 10, width: 250 }}
         >
           <option value="">Select Distributor</option>
           {accounts.map(acc => (
@@ -124,9 +118,9 @@ export default function Manufacturer() {
         <input
           type="number"
           placeholder="Amount"
-          style={{ marginLeft: 10, padding: 10, width: 150 }}
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
+          style={{ marginLeft: 10, padding: 10, width: 150 }}
         />
 
         <button
@@ -135,37 +129,38 @@ export default function Manufacturer() {
             marginLeft: 10,
             padding: "10px 16px",
             background: "green",
-            color: "#fff",
-            borderRadius: 6
+            color: "white",
+            borderRadius: 8
           }}
         >
           Add
         </button>
 
-        {/* ORDERS */}
-        <h2 style={{ marginTop: 40 }}>All Orders</h2>
-
+        {/* Orders */}
+        <h2 style={{ marginTop: 35 }}>All Orders</h2>
         {orders.map(o => (
           <div key={o.id} style={{
-            padding: 12,
             background: "#fff",
-            borderRadius: 8,
-            marginBottom: 12,
-            border: "1px solid #ddd"
+            padding: 14,
+            borderRadius: 10,
+            border: "1px solid #ddd",
+            marginBottom: 10
           }}>
-            <p><b>Distributor:</b> {o.from_name} ({o.from_email})</p>
-            <p><b>Total:</b> ₹ {o.grand_total}</p>
-            <p><b>Date:</b> {new Date(o.created_at).toLocaleString()}</p>
+            <p><b>{o.from_name}</b> ({o.from_email})</p>
+            <p>Total: ₹ {o.grand_total}</p>
+            <p>{new Date(o.created_at).toLocaleString()}</p>
+
             <a
               href={o.pdf_url}
               target="_blank"
               style={{
                 display: "inline-block",
-                marginTop: 5,
+                marginTop: 8,
                 padding: "6px 12px",
-                background: "#0ea5e9",
+                background: "#2563eb",
                 color: "#fff",
-                borderRadius: 6
+                borderRadius: 6,
+                textDecoration: "none"
               }}
             >
               View PDF
@@ -179,37 +174,35 @@ export default function Manufacturer() {
         flex: 1,
         position: "sticky",
         top: 20,
-        height: "90vh",
-        overflowY: "auto",
         background: "#fff",
-        padding: 20,
+        padding: 18,
         borderRadius: 12,
         border: "1px solid #ddd",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.05)"
+        height: "90vh",
+        overflowY: "scroll"
       }}>
         <h2>Payment History</h2>
 
-        {payments.length === 0 ? (
-          <p>No payments yet</p>
-        ) : (
-          payments.map(p => (
-            <div key={p.id} style={{
-              padding: 12,
-              background: "#f9fafb",
-              borderRadius: 10,
-              border: "1px solid #ddd",
-              marginBottom: 12
-            }}>
-              <p><b>Name:</b> {p.name}</p>
-              <p><b>Email:</b> {p.email}</p>
-              <p><b>Amount:</b> ₹ {p.amount}</p>
-              <p><b>Note:</b> {p.note}</p>
-              <p style={{ fontSize: 13, color: "#666" }}>
-                {new Date(p.created_at).toLocaleString()}
-              </p>
-            </div>
-          ))
+        {payments.length === 0 && (
+          <p style={{ color: "#666" }}>No payments found</p>
         )}
+
+        {payments.map(p => (
+          <div key={p.id} style={{
+            background: "#f8fafc",
+            padding: 12,
+            borderRadius: 10,
+            border: "1px solid #ddd",
+            marginBottom: 12
+          }}>
+            <p><b>{p.name}</b> ({p.email})</p>
+            <p><b>₹ {p.amount}</b></p>
+            <p>Note: {p.note || "—"}</p>
+            <p style={{ fontSize: 12, color: "#666" }}>
+              {new Date(p.created_at).toLocaleString()}
+            </p>
+          </div>
+        ))}
       </div>
 
     </div>
