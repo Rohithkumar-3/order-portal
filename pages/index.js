@@ -29,24 +29,21 @@ export default function Home() {
     }
 
     const userEmail = data.user.email.trim().toLowerCase();
-    console.log("LOGGED IN:", userEmail);
+    console.log("Logged in as:", userEmail);
+    alert("LOGGED USER: " + userEmail); // For debugging
 
-    // ✅ ADD ADMIN ROUTE HERE
-    if (userEmail.includes("admin"))
+    // ✅ Routing
+    if (userEmail.includes("admin")) {
       router.push("/admin");
     }
-    else if (userEmail === "manu@vfive.com") {
+    else if (userEmail.includes("manu")) {
       router.push("/manufacturer");
     }
-    else if (
-      userEmail === "dist1@vfive.com" ||
-      userEmail === "dist2@vfive.com"
-    ) {
+    else if (userEmail.includes("dist")) {
       router.push("/distributor");
     }
     else {
-      setMsg("Unauthorized login.");
-      await supabase.auth.signOut();
+      setMsg("Unauthorized login: " + userEmail);
     }
   }
 
