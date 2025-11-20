@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { createClient } from "@supabase/supabase-js";
 import products from "../data/products.json";
 
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -318,4 +319,5 @@ export default function Distributor() {
     </div>
   );
 }
+
 
