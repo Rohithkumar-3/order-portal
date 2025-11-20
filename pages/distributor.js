@@ -8,47 +8,41 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+const distributorNames = {
+  "dist1@vfive.com": "Vijayakumar",
+  "dist2@vfive.com": "Senthil Kumar",
+};
+
 export default function Distributor() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [outstanding, setOutstanding] = useState(0);
-  const [ready, setReady] = useState(false);
 
   const [cart, setCart] = useState({});
   const [msg, setMsg] = useState("");
 
-  // Payment modal state
-  const [showPayBox, setShowPayBox] = useState(false);
-  const [payAmount, setPayAmount] = useState("");
-  const [payNote, setPayNote] = useState("");
-  const [payMsg, setPayMsg] = useState("");
-
-  // Histories
   const [payments, setPayments] = useState([]);
   const [orders, setOrders] = useState([]);
 
-  const distributorNames = {
-    "dist1@vfive.com": "Vijayakumar",
-    "dist2@vfive.com": "Senthil Kumar",
-  };
+  const [showPay, setShowPay] = useState(false);
+  const [payAmount, setPayAmount] = useState("");
+  const [payNote, setPayNote] = useState("");
 
   useEffect(() => {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession();
-
       if (!session) return router.push("/");
 
       const userEmail = session.user.email.toLowerCase();
-      setEmail(userEmail);
-
       const dName = distributorNames[userEmail];
+
       if (!dName) return router.push("/");
 
+      setEmail(userEmail);
       setName(dName);
 
-      // load outstanding, payments, orders
       await refreshOutstanding(userEmail);
       await loadPayments(userEmail);
       await loadOrders(userEmail);
@@ -56,419 +50,272 @@ export default function Distributor() {
       const c = {};
       products.forEach((p) => (c[p.id] = 0));
       setCart(c);
-
-      setReady(true);
     }
 
     init();
   }, []);
 
-  async function refreshOutstanding(userEmail) {
-    try {
-      const { data: acc, error } = await supabase
-        .from("accounts")
-        .select("outstanding")
-        .eq("email", userEmail)
-        .single();
+  async function refreshOutstanding(e) {
+    const { data } = await supabase
+      .from("accounts")
+      .select("outstanding")
+      .eq("email", e)
+      .single();
 
-      if (error) {
-        console.error("Error loading outstanding:", error);
-        return;
-      }
-      if (acc) setOutstanding(acc.outstanding);
-    } catch (err) {
-      console.error(err);
-    }
+    if (data) setOutstanding(data.outstanding);
   }
 
-  async function loadPayments(userEmail) {
-    try {
-      const { data, error } = await supabase
-        .from("payments")
-        .select("*")
-        .eq("email", userEmail)
-        .order("created_at", { ascending: false });
+  async function loadPayments(e) {
+    const { data } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("email", e)
+      .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Load payments error:", error);
-        return;
-      }
-      setPayments(data || []);
-    } catch (err) {
-      console.error(err);
-    }
+    setPayments(data || []);
   }
 
-  async function loadOrders(userEmail) {
-    try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("from_email", userEmail)
-        .order("created_at", { ascending: false });
+  async function loadOrders(e) {
+    const { data } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("from_email", e)
+      .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Load orders error:", error);
-        return;
-      }
-      setOrders(data || []);
-    } catch (err) {
-      console.error(err);
-    }
+    setOrders(data || []);
   }
 
-  function update(id, value) {
-    setCart((prev) => ({ ...prev, [id]: Number(value) }));
+  function changeQty(id, val) {
+    const qty = parseInt(val);
+
+    setCart((prev) => {
+      const newCart = { ...prev };
+
+      if (!qty || qty <= 0) delete newCart[id];
+      else newCart[id] = qty;
+
+      return newCart;
+    });
+  }
+
+  function increase(id) {
+    const current = cart[id] || 0;
+    changeQty(id, current + 1);
+  }
+
+  function decrease(id) {
+    const current = cart[id] || 0;
+    if (current - 1 <= 0) changeQty(id, 0);
+    else changeQty(id, current - 1);
   }
 
   async function submit() {
     setMsg("Placing order...");
-    try {
-      const res = await fetch("/api/place-order", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          cart,
-          from_email: email,
-          from_name: name,
-        }),
-      });
 
-      const j = await res.json();
-      console.log("ORDER RESPONSE:", j);
+    const res = await fetch("/api/place-order", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cart, from_email: email, from_name: name }),
+    });
 
-      if (j.ok) {
-        setMsg("Order placed successfully!");
-        // refresh outstanding and orders
-        await refreshOutstanding(email);
-        await loadOrders(email);
-      } else {
-        setMsg("Failed: " + (j.error || JSON.stringify(j)));
-      }
-    } catch (err) {
-      console.error("Submit error:", err);
-      setMsg("Failed: " + err.message);
+    const j = await res.json();
+
+    if (j.ok) {
+      setMsg("✅ Order placed successfully");
+      await refreshOutstanding(email);
+      await loadOrders(email);
+      setCart({});
+    } else {
+      setMsg("❌ " + j.error);
     }
   }
 
-  // Pay Now: insert payment record, decrement outstanding
   async function payNow() {
-    setPayMsg("");
-    if (!payAmount || isNaN(payAmount) || Number(payAmount) <= 0) {
-      return setPayMsg("Enter a valid amount.");
-    }
+    if (!payAmount || isNaN(payAmount)) return;
 
     const amt = Number(payAmount);
-    try {
-      // Insert payment row
-      const { error: insErr } = await supabase.from("payments").insert([
-        {
-          email,
-          name,
-          amount: amt,
-          note: payNote || null,
-        },
-      ]);
 
-      if (insErr) {
-        console.error("Payment insert error:", insErr);
-        setPayMsg("Payment failed: " + insErr.message);
-        return;
-      }
+    await supabase.from("payments").insert([
+      { email, name, amount: amt, note: payNote },
+    ]);
 
-      // Decrease outstanding using RPC (preferred)
-      const { error: decErr } = await supabase.rpc("decrement_outstanding", {
-        email_input: email,
-        amount: amt,
-      });
+    await supabase.rpc("decrement_outstanding", {
+      email_input: email,
+      amount: amt,
+    });
 
-      if (decErr) {
-        console.error("decrement_outstanding error:", decErr);
-        setPayMsg("Payment recorded but failed to update outstanding: " + decErr.message);
-        // still refresh payments history
-        await loadPayments(email);
-        return;
-      }
+    await refreshOutstanding(email);
+    await loadPayments(email);
 
-      // Refresh outstanding & payment history
-      await refreshOutstanding(email);
-      await loadPayments(email);
-
-      setPayMsg("Payment successful!");
-      setPayAmount("");
-      setPayNote("");
-      setShowPayBox(false);
-    } catch (err) {
-      console.error("PayNow error:", err);
-      setPayMsg("Payment failed: " + (err.message || String(err)));
-    }
+    setPayAmount("");
+    setPayNote("");
+    setShowPay(false);
   }
 
-  if (!ready) return <p style={{ padding: 20 }}>Loading…</p>;
-
   return (
-    <div style={{ padding: 24, maxWidth: 920, margin: "auto" }}>
-      {/* Header Card */}
-      <div
-        style={{
-          background: "#fff",
-          padding: 22,
-          borderRadius: 14,
-          boxShadow: "0 4px 14px rgba(0,0,0,0.08)",
-          border: "1px solid #eee",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <div>
-          <h1 style={{ marginBottom: 6, fontSize: 26, fontWeight: 700 }}>
-            Distributor — {name}
-          </h1>
-          <p style={{ color: "#64748b", margin: "4px 0" }}>
-            Email: <b>{email}</b>
-          </p>
-        </div>
+    <div style={{ minHeight: "100vh", background: "#f1f5f9", padding: 20 }}>
 
-        {/* Outstanding Card */}
-        <div
-          style={{
-            background: "#fff",
-            marginLeft: 16,
-            padding: 16,
-            borderRadius: 12,
-            border: "1px solid #eee",
-            boxShadow: "0 3px 10px rgba(0,0,0,0.05)",
-            minWidth: 220,
-            textAlign: "center",
-          }}
-        >
-          <div style={{ fontSize: 14, color: "#64748b" }}>Outstanding</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#ef4444", marginTop: 6 }}>
-            ₹ {outstanding}
-          </div>
-          <button
-            onClick={() => setShowPayBox(true)}
-            style={{
-              marginTop: 12,
-              padding: "8px 12px",
-              background: "#16a34a",
-              color: "#fff",
-              borderRadius: 8,
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            Pay Now
-          </button>
-        </div>
+      {/* HEADER */}
+      <div style={{
+        background: "linear-gradient(135deg,#1e40af,#2563eb)",
+        color: "#fff",
+        padding: 20,
+        borderRadius: 16
+      }}>
+        <h2>{name}</h2>
+        <p>{email}</p>
+        <h1>₹ {outstanding}</h1>
       </div>
 
-      {/* Main area: left = products, right = history */}
-      <div style={{ display: "flex", gap: 20, marginTop: 22, alignItems: "flex-start" }}>
-        {/* Left: Products & Submit */}
+      {/* MAIN */}
+      <div style={{ display: "flex", gap: 20, marginTop: 20 }}>
+
+        {/* LEFT */}
         <div style={{ flex: 1 }}>
-          <div>
-            {products.map((p) => (
-              <div
-                key={p.id}
-                style={{
-                  background: "#fff",
-                  padding: 18,
-                  borderRadius: 14,
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
-                  border: "1px solid #eee",
-                  marginBottom: 14,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 600 }}>{p.name}</div>
-                  <div style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>₹ {p.rate}</div>
-                </div>
+          {products.map((p) => (
+            <div key={p.id} style={{
+              background: "#fff",
+              padding: 16,
+              borderRadius: 16,
+              marginBottom: 12,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <div>
+                <b>{p.name}</b>
+                <div>₹ {p.rate}</div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => decrease(p.id)}>-</button>
 
                 <input
                   type="number"
-                  min="0"
-                  value={cart[p.id] || 0}
-                  onChange={(e) => update(p.id, e.target.value)}
-                  style={{
-                    width: 100,
-                    padding: 10,
-                    borderRadius: 10,
-                    border: "1px solid #d1d5db",
-                    fontSize: 15,
-                    textAlign: "center",
-                  }}
+                  style={{ width: 60, textAlign: "center" }}
+                  value={cart[p.id] || ""}
+                  onChange={(e) => changeQty(p.id, e.target.value)}
                 />
+
+                <button onClick={() => increase(p.id)}>+</button>
+              </div>
+            </div>
+          ))}
+
+          <button onClick={submit} style={{
+            width: "100%",
+            padding: 15,
+            background: "#2563eb",
+            color: "#fff",
+            borderRadius: 10,
+            border: "none"
+          }}>
+            Place Order
+          </button>
+
+          <p>{msg}</p>
+        </div>
+
+        {/* RIGHT */}
+        <div style={{ width: 360 }}>
+
+          {/* PAY */}
+          <button
+            onClick={() => setShowPay(true)}
+            style={{
+              width: "100%",
+              padding: 16,
+              background: "#22c55e",
+              color: "#fff",
+              borderRadius: 12,
+              border: "none"
+            }}
+          >
+            PAY NOW
+          </button>
+
+          {/* PAYMENTS */}
+          <div style={{ background: "#fff", padding: 12, borderRadius: 12, marginTop: 16 }}>
+            <h3>Payments</h3>
+            {payments.map((p) => (
+              <div key={p.id} style={{ marginBottom: 8 }}>
+                <b>₹ {p.amount}</b>
+                <div style={{ fontSize: 13 }}>{p.note || "—"}</div>
               </div>
             ))}
           </div>
 
-          <button
-            onClick={submit}
-            style={{
-              marginTop: 10,
-              width: "100%",
-              padding: "12px 10px",
-              background: "#2563eb",
-              color: "#fff",
-              borderRadius: 10,
-              fontSize: 16,
-              fontWeight: 600,
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            Submit Order
-          </button>
-
-          <p style={{ marginTop: 12, textAlign: "center", color: "#2563eb" }}>{msg}</p>
-        </div>
-
-        {/* Right: Payment history + Order history */}
-        <div style={{ width: 360 }}>
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Payment History</div>
-            <div>
-              {payments.length === 0 && <div style={{ color: "#64748b" }}>No payments yet</div>}
-              {payments.map((p) => (
-                <div key={p.id} style={{
-                  background: "#fff",
-                  padding: 12,
-                  borderRadius: 10,
-                  border: "1px solid #eee",
-                  marginBottom: 8
-                }}>
-                  <div style={{ fontWeight: 700 }}>₹ {p.amount}</div>
-                  <div style={{ color: "#64748b", fontSize: 13 }}>{p.note || "—"}</div>
-                  <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 6 }}>{new Date(p.created_at).toLocaleString()}</div>
-                </div>
-              ))}
-            </div>
+          {/* ORDERS */}
+          <div style={{ background: "#fff", padding: 12, borderRadius: 12, marginTop: 16 }}>
+            <h3>Orders</h3>
+            {orders.map((o) => (
+              <div key={o.id} style={{ marginBottom: 8 }}>
+                ₹ {o.grand_total}
+                <br />
+                <a href={o.pdf_url} target="_blank">View PDF</a>
+              </div>
+            ))}
           </div>
 
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Order History</div>
-            <div>
-              {orders.length === 0 && <div style={{ color: "#64748b" }}>No orders yet</div>}
-              {orders.map((o) => (
-                <div key={o.id} style={{
-                  background: "#fff",
-                  padding: 12,
-                  borderRadius: 10,
-                  border: "1px solid #eee",
-                  marginBottom: 8
-                }}>
-                  <div style={{ fontWeight: 700 }}>₹ {o.grand_total}</div>
-                  <div style={{ color: "#64748b", fontSize: 13 }}>{o.items?.length || 0} items</div>
-                  <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 6 }}>{new Date(o.created_at).toLocaleString()}</div>
-                  <a href={o.pdf_url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, padding: "6px 10px", background: "#0ea5e9", color: "#fff", borderRadius: 8, textDecoration: "none" }}>View PDF</a>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* Pay Popup Modal */}
-      {showPayBox && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            background: "rgba(0,0,0,0.4)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 999,
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              padding: 24,
-              borderRadius: 14,
-              width: "90%",
-              maxWidth: 400,
-              boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
-            }}
-          >
-            <h3 style={{ marginBottom: 10 }}>Make Payment</h3>
+      {/* PAY MODAL */}
+      {showPay && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "#0006",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }}>
+          <div style={{
+            background: "#fff",
+            padding: 20,
+            borderRadius: 16,
+            width: 300
+          }}>
+            <h3>Make Payment</h3>
 
-            <label style={{ fontSize: 13, color: "#475569" }}>Amount</label>
             <input
-              type="number"
-              placeholder="Enter amount"
+              placeholder="Amount"
               value={payAmount}
               onChange={(e) => setPayAmount(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 12,
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-                fontSize: 15,
-                marginTop: 6,
-                marginBottom: 10
-              }}
+              style={{ width: "100%", padding: 10 }}
             />
 
-            <label style={{ fontSize: 13, color: "#475569" }}>Note (optional)</label>
             <textarea
-              rows={3}
-              placeholder="Add a note for this payment (eg. 'Paid via bank transfer — UTR xxxx')"
+              placeholder="Note"
               value={payNote}
               onChange={(e) => setPayNote(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 12,
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-                fontSize: 14,
-                marginTop: 6
-              }}
+              style={{ width: "100%", padding: 10, marginTop: 10 }}
             />
 
-            <button
-              onClick={payNow}
-              style={{
-                width: "100%",
-                marginTop: 12,
-                padding: 12,
-                background: "#2563eb",
-                color: "#fff",
-                borderRadius: 10,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              Pay
+            <button onClick={payNow} style={{
+              width: "100%",
+              marginTop: 10,
+              padding: 12,
+              background: "#2563eb",
+              color: "#fff",
+              borderRadius: 10,
+              border: "none"
+            }}>
+              CONFIRM
             </button>
 
-            <button
-              onClick={() => setShowPayBox(false)}
-              style={{
-                width: "100%",
-                marginTop: 8,
-                padding: 12,
-                background: "#e5e7eb",
-                color: "#000",
-                borderRadius: 10,
-                cursor: "pointer",
-              }}
-            >
-              Cancel
+            <button onClick={() => setShowPay(false)} style={{
+              width: "100%",
+              marginTop: 8,
+              padding: 12
+            }}>
+              CANCEL
             </button>
-
-            <p style={{ color: payMsg.startsWith("Payment") ? "green" : "red", marginTop: 8 }}>{payMsg}</p>
           </div>
         </div>
       )}
+
     </div>
   );
 }
+
