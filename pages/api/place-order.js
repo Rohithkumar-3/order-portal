@@ -13,84 +13,110 @@ export default async function handler(req, res) {
     let items = [];
     let grand_total = 0;
 
-    // Build items
+    // Build order
     for (const p of products) {
       const qty = Number(cart[p.id] || 0);
       if (qty > 0) {
-        const total = qty * p.rate;
+        const total = +(qty * p.rate).toFixed(2);
         grand_total += total;
 
         items.push({
           id: p.id,
           name: p.name,
-          qty,
           rate: p.rate,
+          qty,
           total,
         });
       }
     }
 
-    // PDF
+    if (items.length === 0)
+      return res.json({ ok: false, error: "No items selected" });
+
+    // ========== CREATE PDF ==========
     const doc = new PDFDocument({ margin: 40 });
-    const stream = new streamBuffers.WritableStreamBuffer();
-    doc.pipe(stream);
+    const buffer = new streamBuffers.WritableStreamBuffer();
+    doc.pipe(buffer);
 
-    doc.fontSize(18).text("Order Notification", { align: "center" });
+    doc.fontSize(18).text("V FIVE ENTERPRISES", { align: "center" });
+    doc.fontSize(14).text("Order Invoice", { align: "center" });
     doc.moveDown();
 
-    doc.fontSize(14).text(`Distributor Name : ${from_name}`);
-    doc.text(`Distributor Email : ${from_email}`);
-    doc.text(`Date : ${new Date().toLocaleString()}`);
+    doc.fontSize(11).text(`Distributor: ${from_name}`);
+    doc.text(`Email: ${from_email}`);
+    doc.text(`Date: ${new Date().toLocaleString()}`);
     doc.moveDown();
 
-    items.forEach((it) =>
+    doc.text("-------------------------------------------------------");
+    doc.text("Product          Qty   Rate    Total");
+    doc.text("-------------------------------------------------------");
+
+    items.forEach((i) => {
       doc.text(
-        `${it.name} — Qty: ${it.qty} — Rate: ₹${it.rate} — Total: ₹${it.total}`
-      )
-    );
-
-    doc.moveDown();
-    doc.fontSize(14).text(`Grand Total: ₹${grand_total}`, {
-      underline: true,
+        `${i.name.padEnd(16)} ${i.qty.toString().padEnd(5)} ₹${i.rate
+          .toString()
+          .padEnd(6)} ₹${i.total}`
+      );
     });
+
+    doc.text("-------------------------------------------------------");
+    doc.moveDown();
+    doc.fontSize(14).text(`GRAND TOTAL: ₹ ${grand_total}`, { align: "right" });
+
+    doc.moveDown(2);
+    doc.fontSize(11).text("Signature _____________________");
 
     doc.end();
     await new Promise((r) => doc.on("end", r));
 
-    const pdfBuffer = stream.getContents();
+    const pdfBuffer = buffer.getContents();
     const fileName = `order_${Date.now()}.pdf`;
 
-    await supabase.storage
-      .from("orders")
-      .upload(fileName, pdfBuffer, { contentType: "application/pdf" });
+    let publicUrl = null;
 
-    const { data: urlData } = supabase.storage
-      .from("orders")
-      .getPublicUrl(fileName);
+    // Upload PDF
+    if (pdfBuffer) {
+      const { error: upErr } = await supabase.storage
+        .from("orders")
+        .upload(fileName, pdfBuffer, {
+          contentType: "application/pdf",
+        });
 
-    // INSERT ORDER
-    const { error: insertErr } = await supabase.from("orders").insert([
+      if (!upErr) {
+        const { data } = supabase.storage.from("orders").getPublicUrl(fileName);
+        publicUrl = data.publicUrl;
+      }
+    }
+
+    // Insert into orders table
+    const { error: orderErr } = await supabase.from("orders").insert([
       {
         from_email,
         from_name,
         pdf_path: fileName,
-        pdf_url: urlData.publicUrl,
+        pdf_url: publicUrl,
         items,
         grand_total,
       },
     ]);
 
-    if (insertErr) throw insertErr;
+    if (orderErr) throw orderErr;
 
-    // UPDATE OUTSTANDING
-    await supabase.rpc("increment_outstanding", {
+    // Increase outstanding
+    const { error: incErr } = await supabase.rpc("increment_outstanding", {
       email_input: from_email,
       amount: grand_total,
     });
 
-    return res.json({ ok: true });
+    if (incErr) console.log("Outstanding Error:", incErr);
+
+    return res.json({
+      ok: true,
+      total: grand_total,
+      pdf: publicUrl,
+    });
   } catch (err) {
-    console.error("ERROR:", err);
-    return res.status(500).json({ error: err.message || String(err) });
+    console.error(err);
+    return res.status(500).json({ error: err.message });
   }
 }
