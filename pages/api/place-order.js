@@ -3,6 +3,7 @@ import PDFDocument from "pdfkit";
 import streamBuffers from "stream-buffers";
 import products from "../../data/products.json";
 
+
 export default async function handler(req, res) {
   if (req.method !== "POST")
     return res.status(405).json({ error: "Method not allowed" });
