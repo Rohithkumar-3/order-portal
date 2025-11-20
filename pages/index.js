@@ -32,7 +32,7 @@ export default function Home() {
     console.log("LOGGED IN:", userEmail);
 
     // ✅ ADD ADMIN ROUTE HERE
-    if (userEmail === "admin@vfive.com") {
+    if (userEmail.includes("admin"))
       router.push("/admin");
     }
     else if (userEmail === "manu@vfive.com") {
