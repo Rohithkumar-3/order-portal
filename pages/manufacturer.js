@@ -1,4 +1,5 @@
 // pages/manufacturer.js
+
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/router";
 import { createClient } from "@supabase/supabase-js";
