@@ -16,26 +16,37 @@ export default function Home() {
 
   async function login(e) {
     e.preventDefault();
+    setMsg("");
 
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
 
-    if (error) return setMsg(error.message);
+    if (error) {
+      setMsg(error.message);
+      return;
+    }
 
-    // Redirect based on role
-    const lower = email.toLowerCase();
+    const userEmail = data.user.email.trim().toLowerCase();
+    console.log("LOGGED IN:", userEmail);
 
-    if (lower === "manu@vfive.com") {
+    // ✅ ADD ADMIN ROUTE HERE
+    if (userEmail === "admin@vfive.com") {
+      router.push("/admin");
+    }
+    else if (userEmail === "manu@vfive.com") {
       router.push("/manufacturer");
-    } else if (
-      lower === "dist1@vfive.com" ||
-      lower === "dist2@vfive.com"
+    }
+    else if (
+      userEmail === "dist1@vfive.com" ||
+      userEmail === "dist2@vfive.com"
     ) {
       router.push("/distributor");
-    } else {
+    }
+    else {
       setMsg("Unauthorized login.");
+      await supabase.auth.signOut();
     }
   }
 
